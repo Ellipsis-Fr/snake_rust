@@ -59,7 +59,7 @@ fn exterior_walls_spawn_system(
 fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<ArenaSize>, multiplier_wall_thickness: u32, axe: &str) {
     match axe {
         "vertical" => {
-            for y in 0..ARENA_HEIGHT {
+            for y in 0..arena_size.tile_height {
                 // bord gauche
                 let left_brick = SpriteBundle {
                     sprite: Sprite {
@@ -68,13 +68,13 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(-EXTERIOR_WALL_OFFSET, arena_size.width, ARENA_WIDTH as f32) - (EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width),
-                            convert(y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                            convert(-EXTERIOR_WALL_OFFSET, arena_size.px_width, arena_size.tile_width as f32) - (EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width),
+                            convert(y as f32, arena_size.px_height, arena_size.tile_height as f32),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / ARENA_WIDTH as f32 * arena_size.width,
-                            EXTERIOR_WALL_LENGTH_COEFF / ARENA_HEIGHT as f32 * arena_size.height,
+                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / arena_size.tile_width as f32 * arena_size.px_width,
+                            EXTERIOR_WALL_LENGTH_COEFF / arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()
@@ -90,13 +90,13 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(ARENA_WIDTH as f32 - EXTERIOR_WALL_OFFSET, arena_size.width, ARENA_WIDTH as f32) + (EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width),
-                            convert(y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                            convert(arena_size.tile_width as f32 - EXTERIOR_WALL_OFFSET, arena_size.px_width, arena_size.tile_width as f32) + (EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width),
+                            convert(y as f32, arena_size.px_height, arena_size.tile_height as f32),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / ARENA_WIDTH as f32 * arena_size.width,
-                            EXTERIOR_WALL_LENGTH_COEFF / ARENA_HEIGHT as f32 * arena_size.height,
+                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / arena_size.tile_width as f32 * arena_size.px_width,
+                            EXTERIOR_WALL_LENGTH_COEFF / arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()
@@ -110,7 +110,7 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                         .insert(Wall)
                         .insert(Collision);
                     commands.spawn(right_brick)
-                        .insert(Position {x: (ARENA_WIDTH as f32) as i32, y: y as i32})
+                        .insert(Position {x: (arena_size.tile_width as f32) as i32, y: y as i32})
                         .insert(Wall)
                         .insert(Collision);
                 } else {
@@ -118,13 +118,13 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                         .insert(Position {x: - (EXTERIOR_WALL_OFFSET * 2.) as i32, y: y as i32})
                         .insert(Wall);
                     commands.spawn(right_brick)
-                        .insert(Position {x: (ARENA_WIDTH as f32 ) as i32, y: y as i32})
+                        .insert(Position {x: (arena_size.tile_width as f32 ) as i32, y: y as i32})
                         .insert(Wall);
                 }
             }
         },
         "horizontal" => {
-            for x in 0..ARENA_WIDTH {
+            for x in 0..arena_size.tile_width {
                 // bord superieur
                 let top_brick = SpriteBundle {
                     sprite: Sprite {
@@ -133,13 +133,13 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(x as f32, arena_size.width, ARENA_WIDTH as f32),
-                            convert(ARENA_HEIGHT as f32 - EXTERIOR_WALL_OFFSET, arena_size.height, ARENA_HEIGHT as f32) + (EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width),
+                            convert(x as f32, arena_size.px_width, arena_size.tile_width as f32),
+                            convert(arena_size.tile_height as f32 - EXTERIOR_WALL_OFFSET, arena_size.px_height, arena_size.tile_height as f32) + (EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            EXTERIOR_WALL_LENGTH_COEFF / ARENA_WIDTH as f32 * arena_size.width,
-                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / ARENA_HEIGHT as f32 * arena_size.height,
+                            EXTERIOR_WALL_LENGTH_COEFF / arena_size.tile_width as f32 * arena_size.px_width,
+                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()
@@ -155,13 +155,13 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(x as f32, arena_size.width, ARENA_WIDTH as f32),
-                            convert(-EXTERIOR_WALL_OFFSET, arena_size.height, ARENA_HEIGHT as f32) - (EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width),
+                            convert(x as f32, arena_size.px_width, arena_size.tile_width as f32),
+                            convert(-EXTERIOR_WALL_OFFSET, arena_size.px_height, arena_size.tile_height as f32) - (EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            EXTERIOR_WALL_LENGTH_COEFF / ARENA_WIDTH as f32 * arena_size.width,
-                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / ARENA_HEIGHT as f32 * arena_size.height,
+                            EXTERIOR_WALL_LENGTH_COEFF / arena_size.tile_width as f32 * arena_size.px_width,
+                            EXTERIOR_WALL_THICKNESS_COEFF * (multiplier_wall_thickness as f32) / arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()
@@ -171,7 +171,7 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                 
                 if multiplier_wall_thickness != 1 {
                     commands.spawn(top_brick)
-                        .insert(Position {x: x as i32, y: (ARENA_HEIGHT as f32) as i32})
+                        .insert(Position {x: x as i32, y: (arena_size.tile_height as f32) as i32})
                         .insert(Wall)
                         .insert(Collision);
                     commands.spawn(bottom_brick)
@@ -180,7 +180,7 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
                         .insert(Collision);
                 } else {
                     commands.spawn(top_brick)
-                        .insert(Position {x: x as i32, y: (ARENA_HEIGHT as f32) as i32})
+                        .insert(Position {x: x as i32, y: (arena_size.tile_height as f32) as i32})
                         .insert(Wall);
                     commands.spawn(bottom_brick)
                         .insert(Position {x: x as i32, y: - (EXTERIOR_WALL_OFFSET * 2.) as i32})
@@ -196,10 +196,10 @@ fn exterior_walls_spawn_by_axe(mut commands: &mut Commands, arena_size: &Res<Are
 fn exterior_wall_corners_spawn(mut commands: &mut Commands, arena_size: &Res<ArenaSize>) {
     // (x, y, decalage x, decalage y)
     let corner_positions: Vec<(f32,f32,f32,f32)> = vec![
-        (-EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width, -EXTERIOR_WALL_THICKNESS_COEFF / ARENA_HEIGHT as f32 * arena_size.height), // coin inférieur gauche
-        (-EXTERIOR_WALL_OFFSET, ARENA_HEIGHT as f32 - EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width, EXTERIOR_WALL_THICKNESS_COEFF / ARENA_HEIGHT as f32 * arena_size.height), // coin supérieur gauche
-        (ARENA_WIDTH as f32 - EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_OFFSET, EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width, -EXTERIOR_WALL_THICKNESS_COEFF / ARENA_HEIGHT as f32 * arena_size.height), // coin inférieur droit
-        (ARENA_WIDTH as f32 - EXTERIOR_WALL_OFFSET, ARENA_HEIGHT as f32 - EXTERIOR_WALL_OFFSET, EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width, EXTERIOR_WALL_THICKNESS_COEFF / ARENA_HEIGHT as f32 * arena_size.height) // coin supérieur droit
+        (-EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width, -EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_height as f32 * arena_size.px_height), // coin inférieur gauche
+        (-EXTERIOR_WALL_OFFSET, arena_size.tile_height as f32 - EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width, EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_height as f32 * arena_size.px_height), // coin supérieur gauche
+        (arena_size.tile_width as f32 - EXTERIOR_WALL_OFFSET, -EXTERIOR_WALL_OFFSET, EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width, -EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_height as f32 * arena_size.px_height), // coin inférieur droit
+        (arena_size.tile_width as f32 - EXTERIOR_WALL_OFFSET, arena_size.tile_height as f32 - EXTERIOR_WALL_OFFSET, EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width, EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_height as f32 * arena_size.px_height) // coin supérieur droit
     ];
 
     for corner_position in corner_positions.into_iter() {
@@ -210,13 +210,13 @@ fn exterior_wall_corners_spawn(mut commands: &mut Commands, arena_size: &Res<Are
             },
             transform: Transform {
                 translation: Vec3::new(
-                    convert(corner_position.0, arena_size.width, ARENA_WIDTH as f32) + corner_position.2,
-                    convert(corner_position.1, arena_size.height, ARENA_HEIGHT as f32) + corner_position.3,
+                    convert(corner_position.0, arena_size.px_width, arena_size.tile_width as f32) + corner_position.2,
+                    convert(corner_position.1, arena_size.px_height, arena_size.tile_height as f32) + corner_position.3,
                     0.0,
                 ),
                 scale: Vec3::new(
-                    EXTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width,
-                    EXTERIOR_WALL_THICKNESS_COEFF / ARENA_HEIGHT as f32 * arena_size.height,
+                    EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width,
+                    EXTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_height as f32 * arena_size.px_height,
                     1.0,
                 ),
                 ..Default::default()
@@ -253,9 +253,9 @@ fn interior_walls_spawn_system(
 fn interior_walls_spawn(mut commands: &mut Commands, arena_size: &Res<ArenaSize>, mut positions_available: &mut ResMut<PositionsAvailable>, axe: &str) {
     match axe {
         "vertical" => {
-            let middle = get_middle(ARENA_WIDTH);
+            let middle = get_middle(arena_size.tile_width);
 
-            for y in 0..ARENA_HEIGHT {
+            for y in 0..arena_size.tile_height {
 
                 let wall_position = Position {x: middle as i32, y: y as i32};
                 positions_available.0.remove(&wall_position);
@@ -267,13 +267,13 @@ fn interior_walls_spawn(mut commands: &mut Commands, arena_size: &Res<ArenaSize>
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(middle as f32, arena_size.width, ARENA_WIDTH as f32),
-                            convert(y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                            convert(middle as f32, arena_size.px_width, arena_size.tile_width as f32),
+                            convert(y as f32, arena_size.px_height, arena_size.tile_height as f32),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            INTERIOR_WALL_THICKNESS_COEFF / ARENA_WIDTH as f32 * arena_size.width,
-                            INTERIOR_WALL_LENGTH_COEFF / ARENA_HEIGHT as f32 * arena_size.height,
+                            INTERIOR_WALL_THICKNESS_COEFF / arena_size.tile_width as f32 * arena_size.px_width,
+                            INTERIOR_WALL_LENGTH_COEFF / arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()
@@ -286,9 +286,9 @@ fn interior_walls_spawn(mut commands: &mut Commands, arena_size: &Res<ArenaSize>
             }
         },
         "horizontal" => {
-            let middle = get_middle(ARENA_HEIGHT);
+            let middle = get_middle(arena_size.tile_height);
 
-            for x in 0..ARENA_WIDTH {
+            for x in 0..arena_size.tile_width {
 
                 let wall_position = Position {x: x as i32, y: middle as i32};
                 positions_available.0.remove(&wall_position);
@@ -300,13 +300,13 @@ fn interior_walls_spawn(mut commands: &mut Commands, arena_size: &Res<ArenaSize>
                     },
                     transform: Transform {
                         translation: Vec3::new(
-                            convert(x as f32, arena_size.width, ARENA_WIDTH as f32),
-                            convert(middle as f32 , arena_size.height, ARENA_HEIGHT as f32),
+                            convert(x as f32, arena_size.px_width, arena_size.tile_width as f32),
+                            convert(middle as f32 , arena_size.px_height, arena_size.tile_height as f32),
                             0.0,
                         ),
                         scale: Vec3::new(
-                            INTERIOR_WALL_LENGTH_COEFF / ARENA_WIDTH as f32 * arena_size.width,
-                            INTERIOR_WALL_THICKNESS_COEFF/ ARENA_HEIGHT as f32 * arena_size.height,
+                            INTERIOR_WALL_LENGTH_COEFF / arena_size.tile_width as f32 * arena_size.px_width,
+                            INTERIOR_WALL_THICKNESS_COEFF/ arena_size.tile_height as f32 * arena_size.px_height,
                             1.0,
                         ),
                         ..Default::default()

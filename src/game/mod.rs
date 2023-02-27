@@ -52,8 +52,10 @@ pub struct WinSize {
 
 #[derive(Resource)]
 pub struct ArenaSize {
-	pub width: f32,
-	pub height: f32,
+	pub px_width: f32,
+	pub tile_width: u32,
+	pub px_height: f32,
+	pub tile_height: u32,
 }
 
 #[derive(Resource)]
@@ -155,8 +157,27 @@ fn setup_system(
 	// add WinSize resource
 	commands.insert_resource(WinSize { width: win_w, height: win_h });
 
+	let mut tile_width = ARENA_WIDTH;
+	let mut tile_height = ARENA_HEIGHT;
+
+	
+	match game_type.wall_type {
+        2 => tile_width += 1,
+        3 => tile_height +=1,
+        4 => {
+            tile_width += 1;
+			tile_height += 1;
+        },
+		_ => ()
+    }
+
 	// add ArenaSize resource
-	commands.insert_resource(ArenaSize { width: WINDOW_WIDTH, height: WINDOW_HEIGHT });
+	commands.insert_resource(ArenaSize {
+		px_width: WINDOW_WIDTH,
+		tile_width,
+		px_height: WINDOW_HEIGHT,
+		tile_height
+	});
 
 
 	// add count food resource
@@ -166,7 +187,7 @@ fn setup_system(
 	commands.insert_resource(Score(0));
 
 	// init positions available
-	commands.insert_resource(PositionsAvailable(get_all_arena_positions()));
+	commands.insert_resource(PositionsAvailable(get_all_arena_positions(tile_height as usize, tile_width as usize)));
 
 	// positions_available.0.extend(get_all_arena_positions());
 
@@ -213,11 +234,11 @@ fn setup_system(
 	// map_coordinates(commands, asset_server, win_w, win_h);
 }
 
-fn get_all_arena_positions() -> HashSet<Position> {
+fn get_all_arena_positions(height: usize, width: usize) -> HashSet<Position> {
 	let mut all_arena_positions = HashSet::new();
 
-	for y in 0..ARENA_HEIGHT {
-		for x in 0..ARENA_WIDTH {
+	for y in 0..height {
+		for x in 0..width {
 			all_arena_positions.insert(Position{x: x as i32, y: y as i32});
 		}
 	}
@@ -265,6 +286,7 @@ fn get_all_arena_positions() -> HashSet<Position> {
 
 fn snake_movement_system(
 	mut commands: Commands,
+	arena_size: Res<ArenaSize>,
 	game_type: Res<GameType>,
 	mut snake_head_query: Query<(&Direction, &mut Position, &mut SnakeHead)>,
 	mut snake_body_query: Query<(Entity, &mut SnakeBody)>,
@@ -272,7 +294,7 @@ fn snake_movement_system(
 	if let Ok((snake_direction, mut snake_position, mut snake_head)) = snake_head_query.get_single_mut() {
 		let snake_head_actual_position = snake_position.clone();
 
-		update_snake_head_position(snake_direction, &mut snake_position, game_type.wall_type);
+		update_snake_head_position(snake_direction, &mut snake_position, arena_size, game_type.wall_type);
 		snake_head.moved = true;
 		
 		add_new_body_part(&mut commands, snake_head_actual_position, &mut *snake_head);
@@ -285,31 +307,31 @@ fn snake_movement_system(
 	}
 }
 
-fn update_snake_head_position(snake_direction: &Direction, mut snake_position: &mut Mut<Position>, wall_type: usize) {
+fn update_snake_head_position(snake_direction: &Direction, mut snake_position: &mut Mut<Position>, arena_size: Res<ArenaSize>, wall_type: usize) {
 	let can_pass = wall_type != 1;
 	
 	match snake_direction {
 		Direction::UP => {
 			snake_position.y += 1;
-			if snake_position.y == ARENA_HEIGHT as i32 && can_pass {
+			if snake_position.y == arena_size.tile_height as i32 && can_pass {
 				snake_position.y = 0;
 			}
 		},
 		Direction::DOWN => {
 			snake_position.y -= 1;
 			if snake_position.y < 0 && can_pass {
-				snake_position.y = ARENA_HEIGHT as i32 - 1;
+				snake_position.y = arena_size.tile_height as i32 - 1;
 			}
 		},
 		Direction::LEFT => {
 			snake_position.x -= 1;
 			if snake_position.x < 0 && can_pass {
-				snake_position.x = ARENA_WIDTH as i32 - 1;
+				snake_position.x = arena_size.tile_width as i32 - 1;
 			}
 		},
 		Direction::RIGHT => {
 			snake_position.x += 1;
-			if snake_position.x == ARENA_WIDTH as i32 && can_pass {
+			if snake_position.x == arena_size.tile_width as i32 && can_pass {
 				snake_position.x = 0;
 			}
 		},
@@ -360,8 +382,8 @@ fn remove_body_part(mut snake_head: Mut<SnakeHead>, mut snake_body_query: Query<
 fn size_scaling_system(arena_size: Res<ArenaSize>, mut q: Query<(&Size, &mut Transform)>) {
     for (sprite_size, mut transform) in q.iter_mut() {
         transform.scale = Vec3::new(
-            sprite_size.width / ARENA_WIDTH as f32 * arena_size.width,
-            sprite_size.height / ARENA_HEIGHT as f32 * arena_size.height,
+            sprite_size.width / arena_size.tile_width as f32 * arena_size.px_width,
+            sprite_size.height / arena_size.tile_height as f32 * arena_size.px_height,
             1.0,
         );
     }
@@ -374,16 +396,16 @@ fn position_translation_system(
 ) {
 	if let Ok((snake_position, mut snake_transform)) = snake_head_query.get_single_mut() {
 		snake_transform.translation = Vec3::new(
-			convert(snake_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
-			convert(snake_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+			convert(snake_position.x as f32, arena_size.px_width, arena_size.tile_width as f32),
+			convert(snake_position.y as f32, arena_size.px_height, arena_size.tile_height as f32),
 			0.0,
 		);
 	}
 	
 	for (snake_body_position, mut snake_body_transform) in snake_body_query.iter_mut() {
 		snake_body_transform.translation = Vec3::new(
-			convert(snake_body_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
-			convert(snake_body_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+			convert(snake_body_position.x as f32, arena_size.px_width, arena_size.tile_width as f32),
+			convert(snake_body_position.y as f32, arena_size.px_height, arena_size.tile_height as f32),
 			0.0,
 		);
 	}
@@ -514,14 +536,15 @@ fn score_system(
 fn check_end_of_game_system(
 	snake_head_query: Query<(&SnakeHead)>,
 	mut app_state: ResMut<State<AppState>>,
+	arena_size: Res<ArenaSize>,
 	game_type: Res<GameType>
 ) {
 	let maximun_snake_size;
 
 	match game_type.wall_type {
-		4 => maximun_snake_size = (ARENA_WIDTH - 1) * (ARENA_HEIGHT - 1),
-		2 | 3 => maximun_snake_size = (ARENA_WIDTH - 1) * ARENA_HEIGHT,
-		_ => maximun_snake_size = ARENA_WIDTH * ARENA_HEIGHT,
+		4 => maximun_snake_size = (arena_size.tile_width - 1) * (arena_size.tile_height - 1),
+		2 | 3 => maximun_snake_size = (arena_size.tile_width - 1) * arena_size.tile_height,
+		_ => maximun_snake_size = arena_size.tile_width * arena_size.tile_height,
 	}
 	
 	let snake_size = 1 + snake_head_query.get_single().unwrap().body_parts.len() as u32;
