@@ -21,8 +21,8 @@ enum AppState {
 
 // region:    --- Game Constants
 
-const WINDOW_WIDTH: f32 = 600.;
-const WINDOW_HEIGHT: f32 = 600.;
+const WINDOW_WIDTH: f32 = 500.;
+const WINDOW_HEIGHT: f32 = 500.;
 const UPPER_EDGE : f32 = 0.1;
 
 const ARENA_WIDTH: u32 = 20;

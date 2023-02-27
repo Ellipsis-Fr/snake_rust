@@ -82,8 +82,8 @@ fn food_spawn_system(
         },
         transform: Transform {
             translation: Vec3::new(
-                convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
-                convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                convert(new_position.x as f32, arena_size.px_width, arena_size.tile_width as f32),
+                convert(new_position.y as f32, arena_size.px_height, arena_size.tile_height as f32),
                 0.0,
             ),
             ..Default::default()
