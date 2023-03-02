@@ -59,8 +59,14 @@ pub struct Velocity {
 
 // region:    --- Food Component
 
+pub enum FoodType {
+    Simple,
+    Gold,
+    Bonus
+}
+
 #[derive(Component)]
-pub struct Food;
+pub struct Food(pub FoodType);
 
 #[derive(Component)]
 pub struct FoodTimer(pub Timer);

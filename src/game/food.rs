@@ -1,9 +1,11 @@
 use std::{time::Duration, collections::HashSet};
 
-use bevy::{prelude::{Plugin, App, SystemSet, Commands, Query, Transform, Res, ResMut, Vec3, With, Entity, State, IntoSystemDescriptor, CoreStage, Or}, time::{FixedTimestep, Time}, sprite::{SpriteBundle, Sprite}, ecs::schedule::ShouldRun};
+use bevy::{prelude::{Plugin, App, SystemSet, Commands, Query, Transform, Res, ResMut, Vec3, With, Entity, State, IntoSystemDescriptor, CoreStage, Or}, time::{FixedTimestep, Time, Timer, TimerMode}, sprite::{SpriteBundle, Sprite}, ecs::schedule::ShouldRun};
 use iyes_loopless::prelude::{IntoConditionalSystem, ConditionHelpers, AppLooplessFixedTimestepExt, ConditionSet};
 use rand::Rng;
-use super::{AppState, setup_system, components::{SnakeHead, SnakeBody}, PositionsAvailable};
+use crate::main_menu::sub_menu::GameType;
+
+use super::{AppState, setup_system, components::{SnakeHead, SnakeBody, FoodType}, PositionsAvailable, GOLD_FOOD_COLOR, snake};
 
 use super::{components::{Position, Size, Food, FoodTimer}, ArenaSize, FoodCount, FOOD_MAX, ARENA_WIDTH, ARENA_HEIGHT, FOOD_COLOR, FOOD_SIZE, UPPER_EDGE};
 
@@ -17,11 +19,33 @@ impl Plugin for FoodPlugin {
                 // give it a label
                 "food_spawn_time",
             )
+            .add_fixed_timestep(
+                Duration::from_millis(30000),
+                // give it a label
+                "gold_food_spawn_time",
+            )
+            .add_fixed_timestep(
+                Duration::from_millis(60000),
+                // give it a label
+                "bonus_food_spawn_time",
+            )
             .add_fixed_timestep_system(
                 "food_spawn_time",
                 0,
                 food_spawn_system
                 .run_in_bevy_state(AppState::InGame)
+            )
+            .add_fixed_timestep_system(
+                "gold_food_spawn_time",
+                0,
+                gold_food_spawn_system
+                .run_in_bevy_state(AppState::InGame)
+            )
+            .add_fixed_timestep_system(
+                "bonus_food_spawn_time",
+                0,
+                bonus_food_spawn_system
+                .run_in_bevy_state(AppState::InGame).run_if(is_game_with_wall).run_if(snake_is_not_too_big)
             )
             .add_system_set_to_stage(
                 CoreStage::PostUpdate,
@@ -38,17 +62,39 @@ impl Plugin for FoodPlugin {
     }
 }
 
-fn check_time_passed(time: Res<Time>, app_state: Res<State<AppState>>) -> ShouldRun {
-    match app_state.current() {
-        AppState::InGame => {
-            if time.elapsed_seconds() as u32 % 5 == 0 {
-                return ShouldRun::Yes;
-            }
-        },
-        _ => {}
-    }
+// fn check_time_passed(time: Res<Time>, app_state: Res<State<AppState>>) -> ShouldRun {
+//     match app_state.current() {
+//         AppState::InGame => {
+//             if time.elapsed_seconds() as u32 % 5 == 0 {
+//                 return ShouldRun::Yes;
+//             }
+//         },
+//         _ => {}
+//     }
     
-    ShouldRun::No
+//     ShouldRun::No
+// }
+
+fn is_lucky(luck: f64) -> bool {
+    let mut rng = rand::thread_rng();
+    rng.gen_bool(1. / luck)
+}
+
+fn is_game_with_wall(game_type: Res<GameType>) -> bool {
+    if game_type.wall_type == 0 as usize {
+        return false;
+    }    
+    true
+}
+
+fn snake_is_not_too_big(query: Query<(&SnakeHead), With<SnakeHead>>) -> bool {
+    if let Ok(snake) = query.get_single() {
+        let snake_size = 1 + snake.body_parts.len() as u32;
+        if snake_size as f32 / (ARENA_HEIGHT * ARENA_WIDTH) as f32 > 0.75 {
+            return false;
+        }
+    }  
+    true
 }
 
 fn food_spawn_system(
@@ -72,6 +118,9 @@ fn food_spawn_system(
 
     let mut positions_available_depending_snake_and_food: Vec<Position> = get_available_positions_depending_snake_and_food(positions_available.0.clone(), query);
     
+    if positions_available_depending_snake_and_food.is_empty() {
+        return;
+    }
 
     let new_position = get_new_food_position(positions_available_depending_snake_and_food);
 
@@ -90,7 +139,7 @@ fn food_spawn_system(
         },
         ..Default::default()
     })
-    .insert(Food) 
+    .insert(Food(FoodType::Simple)) 
     .insert(new_position)
     .insert(Size::square(FOOD_SIZE))
     .insert(FoodTimer::default());
@@ -98,6 +147,83 @@ fn food_spawn_system(
     food_count.0 += 1; 
 }
 
+fn gold_food_spawn_system(
+    mut commands: Commands,
+    arena_size: Res<ArenaSize>,
+    positions_available: Res<PositionsAvailable>,
+    query: Query<(&Position), Or<(With<SnakeHead>, With<SnakeBody>, With<Food>)>>,
+) {
+    if !is_lucky(3.) {
+        return;
+    }
+
+    let mut positions_available_depending_snake_and_food: Vec<Position> = get_available_positions_depending_snake_and_food(positions_available.0.clone(), query);
+    
+    if positions_available_depending_snake_and_food.is_empty() {
+        return;
+    }
+
+    let new_position = get_new_food_position(positions_available_depending_snake_and_food);
+
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color: GOLD_FOOD_COLOR,
+            ..Default::default()
+        },
+        transform: Transform {
+            translation: Vec3::new(
+                convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
+                convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                0.0,
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .insert(Food(FoodType::Gold)) 
+    .insert(new_position)
+    .insert(Size::square(FOOD_SIZE))
+    .insert(FoodTimer(Timer::from_seconds(6., TimerMode::Once)));
+}
+
+fn bonus_food_spawn_system(
+    mut commands: Commands,
+    arena_size: Res<ArenaSize>,
+    positions_available: Res<PositionsAvailable>,
+    query: Query<(&Position), Or<(With<SnakeHead>, With<SnakeBody>, With<Food>)>>,
+) {
+    if !is_lucky(50.) {
+        return;
+    }
+
+    let mut positions_available_depending_snake_and_food: Vec<Position> = get_available_positions_depending_snake_and_food(positions_available.0.clone(), query);
+    
+    if positions_available_depending_snake_and_food.is_empty() {
+        return;
+    }
+
+    let new_position = get_new_food_position(positions_available_depending_snake_and_food);
+// TODO
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color: GOLD_FOOD_COLOR,
+            ..Default::default()
+        },
+        transform: Transform {
+            translation: Vec3::new(
+                convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
+                convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                0.0,
+            ),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .insert(Food(FoodType::Gold)) 
+    .insert(new_position)
+    .insert(Size::square(FOOD_SIZE))
+    .insert(FoodTimer(Timer::from_seconds(6., TimerMode::Once)));
+}
 // fn get_occupied_positions(query: Query<(&Position)>) -> HashSet<i32> {
 //     let mut occupied_positions: HashSet<i32>= HashSet::new();
 
@@ -166,17 +292,17 @@ fn food_timer_system(
     mut commands: Commands,
     time: Res<Time>,
     mut food_count: ResMut<FoodCount>,
-    mut query: Query<(Entity, &mut FoodTimer), With<Food>>,
+    mut query: Query<(Entity, &mut FoodTimer, &Food), With<Food>>,
 ) {
-    if food_count.0 < 1 {
-        return;
-    }
-
-    for (entity, mut timer) in query.iter_mut() {
+    for (entity, mut timer, food) in query.iter_mut() {
         timer.0.tick(time.delta());
         if timer.0.finished() {
             commands.entity(entity).despawn();
-            food_count.0 -= 1;
+
+            match food.0 {
+                FoodType::Simple => food_count.0 -= 1,
+                _ => ()
+            }
         }
     }
 }

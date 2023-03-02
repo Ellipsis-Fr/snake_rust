@@ -16,6 +16,8 @@ use bevy::{prelude::*, time::FixedTimestep, text::Text2dBounds, ecs::query};
 use uuid::Uuid;
 use crate::{WINDOW_WIDTH, ARENA_WIDTH, WINDOW_HEIGHT, UPPER_EDGE, ARENA_HEIGHT, main_menu::sub_menu::GameType};
 
+use self::components::FoodType;
+
 use super::AppState;
 
 // region:    --- Game Constants
@@ -26,7 +28,8 @@ const SNAKE_HEAD_SIZE: f32 = 0.8;
 const SNAKE_BODY_COLOR: Color = Color::rgb(0.3, 0.3, 0.3);
 const SNAKE_BODY_SIZE: f32 = 0.6;
 
-const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0); 
+const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
+const GOLD_FOOD_COLOR: Color = Color::rgb(1.0, 0.84, 0.);
 const FOOD_SIZE: f32 = 0.8;
 
 const TIME_STEP: f32 = 1./60.;
@@ -58,6 +61,11 @@ pub struct ArenaSize {
 
 #[derive(Resource)]
 struct FoodCount(u32);
+
+#[derive(Resource)]
+struct GameTextures {
+	bonus_star: Handle<Image>,
+}
 
 #[derive(Resource)]
 struct Score(u32);
@@ -161,6 +169,9 @@ fn setup_system(
 
 	// add count food resource
 	commands.insert_resource(FoodCount(0));
+
+	// add GameTextures resource
+	commands.insert_resource(GameTextures {bonus_star: asset_server.load("star.png")});
 	
 	// add score resource
 	commands.insert_resource(Score(0));
@@ -396,7 +407,7 @@ fn check_correct_snake_head_position_system(
 	mut app_state: ResMut<State<AppState>>
 ) {
 	if let Ok(snake_head_position) = snake_head_query.get_single() {
-		if /*collide_with_body(snake_head_position, snake_body_query) ||*/ collide_with_wall(snake_head_position, wall_query) {
+		if collide_with_body(snake_head_position, snake_body_query) || collide_with_wall(snake_head_position, wall_query) {
 			app_state.set(AppState::GameOver(false));
 		}
 	}
@@ -431,15 +442,23 @@ fn snake_ate_food_system(
 	mut food_count: ResMut<FoodCount>,
 	mut score: ResMut<Score>,
 	mut snake_head_query: Query<(&Position, &mut SnakeHead), With<SnakeHead>>,
-	food_query: Query<(Entity, &Position, &FoodTimer), With<Food>>,
+	food_query: Query<(Entity, &Position, &FoodTimer, &Food), With<Food>>,
 	game_type: Res<GameType>
 ) {
 	if let Ok((snake_position, mut snake_head)) = snake_head_query.get_single_mut() {
-		for (food_entity, food_position, food_timer) in food_query.iter() {
+		for (food_entity, food_position, food_timer, food) in food_query.iter() {
 			if is_same_position(snake_position, food_position) {
-				food_count.0 -= 1;
 				snake_head.ate = true;
-				score.0 += (get_points(food_timer.0.duration().as_secs(), food_timer.0.elapsed().as_secs()) * game_type.multiplier);
+
+				match food.0 {
+					FoodType::Simple => {
+						food_count.0 -= 1;
+						score.0 += (get_points(food_timer.0.duration().as_secs(), food_timer.0.elapsed().as_secs()) * game_type.multiplier);
+					},
+					FoodType::Gold => score.0 += (10 * game_type.multiplier),
+					_ => ()
+				}
+				
 				commands.entity(food_entity).despawn();
 			}
 		}
