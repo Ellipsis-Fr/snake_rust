@@ -1,11 +1,11 @@
 use std::{time::Duration, collections::HashSet};
 
-use bevy::{prelude::{Plugin, App, SystemSet, Commands, Query, Transform, Res, ResMut, Vec3, With, Entity, State, IntoSystemDescriptor, CoreStage, Or}, time::{FixedTimestep, Time, Timer, TimerMode}, sprite::{SpriteBundle, Sprite}, ecs::schedule::ShouldRun};
+use bevy::{prelude::{Plugin, App, SystemSet, Commands, Query, Transform, Res, ResMut, Vec3, With, Entity, State, IntoSystemDescriptor, CoreStage, Or, Vec2, Color, Mesh, Assets, shape, Handle, Without}, time::{FixedTimestep, Time, Timer, TimerMode}, sprite::{SpriteBundle, Sprite, MaterialMesh2dBundle, ColorMaterial, Material2d}, ecs::schedule::ShouldRun};
 use iyes_loopless::prelude::{IntoConditionalSystem, ConditionHelpers, AppLooplessFixedTimestepExt, ConditionSet};
 use rand::Rng;
-use crate::main_menu::sub_menu::GameType;
+use crate::{main_menu::sub_menu::GameType, game::components::BonusTimer};
 
-use super::{AppState, setup_system, components::{SnakeHead, SnakeBody, FoodType}, PositionsAvailable, GOLD_FOOD_COLOR, snake};
+use super::{AppState, setup_system, components::{SnakeHead, SnakeBody, FoodType}, PositionsAvailable, GOLD_FOOD_COLOR, snake, GameTextures};
 
 use super::{components::{Position, Size, Food, FoodTimer}, ArenaSize, FoodCount, FOOD_MAX, ARENA_WIDTH, ARENA_HEIGHT, FOOD_COLOR, FOOD_SIZE, UPPER_EDGE};
 
@@ -25,7 +25,7 @@ impl Plugin for FoodPlugin {
                 "gold_food_spawn_time",
             )
             .add_fixed_timestep(
-                Duration::from_millis(60000),
+                Duration::from_millis(40000),
                 // give it a label
                 "bonus_food_spawn_time",
             )
@@ -53,7 +53,8 @@ impl Plugin for FoodPlugin {
                 // .run_not_in_bevy_state(AppState::MainMenu)
                 // .run_not_in_bevy_state(AppState::Pause)
                 .run_in_bevy_state(AppState::InGame)
-                .with_system(food_timer_system).into()
+                .with_system(food_timer_system)
+                .with_system(bonus_color_timer_system).into()
             )
             .add_system_set(
                 SystemSet::on_exit(AppState::InGame)
@@ -87,10 +88,29 @@ fn is_game_with_wall(game_type: Res<GameType>) -> bool {
     true
 }
 
-fn snake_is_not_too_big(query: Query<(&SnakeHead), With<SnakeHead>>) -> bool {
+fn snake_is_not_too_big(query: Query<(&SnakeHead), With<SnakeHead>>, game_type: Res<GameType>) -> bool {
     if let Ok(snake) = query.get_single() {
         let snake_size = 1 + snake.body_parts.len() as u32;
-        if snake_size as f32 / (ARENA_HEIGHT * ARENA_WIDTH) as f32 > 0.75 {
+        let maximun_snake_size;
+        match game_type.wall_type {
+            4 => maximun_snake_size = (ARENA_WIDTH - 1) * (ARENA_HEIGHT - 1),
+            2 | 3 => maximun_snake_size = (ARENA_WIDTH - 1) * ARENA_HEIGHT,
+            _ => maximun_snake_size = ARENA_WIDTH * ARENA_HEIGHT,
+        }
+        
+        // let mut x = 1;
+        // x = (maximun_snake_size * 75) / 100 - 1;
+        // let snake_size = x + snake.body_parts.len() as u32;
+        // println!("");
+        // println!("");
+        // println!("===================================================");
+        // println!("===================================================");
+        // println!("===================================================");
+        // println!("taille du serpent {}", snake_size);
+        // println!("taille maximal du serpent {}", maximun_snake_size);
+        // println!("rario taille du serpent / taille max {}", snake_size as f32 / maximun_snake_size as f32);
+        
+        if snake_size as f32 / maximun_snake_size as f32 > 0.75 {
             return false;
         }
     }  
@@ -188,11 +208,14 @@ fn gold_food_spawn_system(
 
 fn bonus_food_spawn_system(
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     arena_size: Res<ArenaSize>,
     positions_available: Res<PositionsAvailable>,
+    game_texture: Res<GameTextures>,
     query: Query<(&Position), Or<(With<SnakeHead>, With<SnakeBody>, With<Food>)>>,
 ) {
-    if !is_lucky(50.) {
+    if !is_lucky(20.) {
         return;
     }
 
@@ -201,28 +224,53 @@ fn bonus_food_spawn_system(
     if positions_available_depending_snake_and_food.is_empty() {
         return;
     }
-
     let new_position = get_new_food_position(positions_available_depending_snake_and_food);
-// TODO
+    // systeme de changement de couleur à utiliser https://github.com/bevyengine/bevy/discussions/2869
+    let t =  materials.add(ColorMaterial::from(Color::RED));
+    // commands.insert_resource(t.clone());
+
+    commands.spawn(MaterialMesh2dBundle {
+        mesh: meshes.add(shape::Circle::new(10.).into()).into(),
+        material: t,
+        transform: Transform::from_translation(Vec3::new(
+            convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
+            convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+            0.0,
+        )),
+        ..Default::default()
+    })
+    .insert(Food(FoodType::Bonus)) 
+    .insert(new_position)
+    // .insert(Size::square(FOOD_SIZE))
+    .insert(FoodTimer(Timer::from_seconds(6., TimerMode::Once)))
+    .insert(BonusTimer::default());
+
+    /* Spawn a sprite with img
+    Je conserve pour potentiel réutilisation dans d'autres codes 
     commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            color: GOLD_FOOD_COLOR,
+        sprite: Sprite { 
+            // custom_size: Some(Vec2::new(5.0, 5.0) * 7.),
+            color: Color::rgb(0.3, 0.3, 0.3),
+            // color: Color::hsla(180., 0.3, 0.2, 0.92),
             ..Default::default()
-        },
+         },
+        texture: game_texture.bonus_star.clone(),
         transform: Transform {
             translation: Vec3::new(
                 convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
                 convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
                 0.0,
             ),
+            scale: Vec3::new(0.5, 0.5, 1.),
             ..Default::default()
         },
         ..Default::default()
     })
-    .insert(Food(FoodType::Gold)) 
+    .insert(Food(FoodType::Bonus)) 
     .insert(new_position)
-    .insert(Size::square(FOOD_SIZE))
-    .insert(FoodTimer(Timer::from_seconds(6., TimerMode::Once)));
+    // .insert(Size::square(FOOD_SIZE))
+    .insert(FoodTimer(Timer::from_seconds(6., TimerMode::Once)))
+    .insert(BonusTimer::default()); */
 }
 // fn get_occupied_positions(query: Query<(&Position)>) -> HashSet<i32> {
 //     let mut occupied_positions: HashSet<i32>= HashSet::new();
@@ -306,6 +354,44 @@ fn food_timer_system(
         }
     }
 }
+
+fn bonus_color_timer_system(
+    time: Res<Time>,
+    mut snake_head_bonus_timer_query: Query<(&mut Sprite, &mut BonusTimer), (With<BonusTimer>, With<SnakeHead>)>,
+    mut color_materials_bonus_timer_query: Query<(&Handle<ColorMaterial>, &mut BonusTimer), (With<BonusTimer>, With<Food>, Without<SnakeHead>)>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    for (mut sprite, mut bonus_timer) in snake_head_bonus_timer_query.iter_mut() {
+        bonus_timer.color_timer.tick(time.delta());
+        if bonus_timer.color_timer.finished() {
+            bonus_timer.index_color += 1 as usize;
+            if bonus_timer.index_color >= bonus_timer.colors.len() { bonus_timer.index_color = 0; }
+            sprite.color = bonus_timer.colors.get(bonus_timer.index_color).unwrap().clone();
+        }
+    }
+
+    if let Ok((color_material, mut bonus_timer)) = color_materials_bonus_timer_query.get_single_mut() {
+        bonus_timer.color_timer.tick(time.delta());
+        if bonus_timer.color_timer.finished() {
+            bonus_timer.index_color += 1 as usize;
+            if bonus_timer.index_color >= bonus_timer.colors.len() { bonus_timer.index_color = 0; }
+            let mut material = materials.get_mut(color_material).unwrap();
+            material.color = bonus_timer.colors.get(bonus_timer.index_color).unwrap().clone();
+        }
+    }
+}
+
+/* // Utiliser avec le sprite
+fn bonus_color_timer_system(time: Res<Time>, mut query: Query<(&mut Sprite, &mut BonusTimer), With<BonusTimer>>,) {
+    for (mut sprite, mut bonus_timer) in query.iter_mut() {
+        bonus_timer.color_timer.tick(time.delta());
+        if bonus_timer.color_timer.finished() {
+            bonus_timer.index_color += 1 as usize;
+            if bonus_timer.index_color >= bonus_timer.colors.len() { bonus_timer.index_color = 0; }
+            sprite.color = bonus_timer.colors.get(bonus_timer.index_color).unwrap().clone();
+        }
+    }
+} */
 
 fn cleanup_food_system(mut commands: Commands, mut query: Query<Entity, With<Food>>) {
     for entity in query.iter_mut() {
