@@ -65,7 +65,12 @@ fn snake_spawn_system(mut commands: Commands, /*win_size: Res<WinSize>*/) {
         },
         ..Default::default()
     })
-    .insert(SnakeHead { moved: true, ate: false, body_parts: VecDeque::from([snake_body]) })
+    .insert(SnakeHead { 
+        moved: true, 
+        ate: false,
+        invincible: false,
+        body_parts: VecDeque::from([snake_body])
+    })
     .insert(init_direction)
     .insert(Position {x: init_x, y: init_y})
     .insert(Size::square(SNAKE_HEAD_SIZE));

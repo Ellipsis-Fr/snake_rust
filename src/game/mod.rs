@@ -12,9 +12,11 @@ use wall::WallPlugin;
 mod game_over;
 use game_over::GameOverPlugin;
 
-use bevy::{prelude::*, time::FixedTimestep, text::Text2dBounds, ecs::query};
+use bevy::{prelude::*, time::FixedTimestep, text::Text2dBounds, ecs::query, sprite};
 use uuid::Uuid;
 use crate::{WINDOW_WIDTH, ARENA_WIDTH, WINDOW_HEIGHT, UPPER_EDGE, ARENA_HEIGHT, main_menu::sub_menu::GameType};
+
+use self::components::{FoodType, BonusTimer};
 
 use super::AppState;
 
@@ -26,7 +28,8 @@ const SNAKE_HEAD_SIZE: f32 = 0.8;
 const SNAKE_BODY_COLOR: Color = Color::rgb(0.3, 0.3, 0.3);
 const SNAKE_BODY_SIZE: f32 = 0.6;
 
-const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0); 
+const FOOD_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
+const GOLD_FOOD_COLOR: Color = Color::rgb(1.0, 0.84, 0.);
 const FOOD_SIZE: f32 = 0.8;
 
 const TIME_STEP: f32 = 1./60.;
@@ -40,6 +43,8 @@ const EXTERIOR_WALL_THICKNESS_COEFF: f32 = 0.125;
 const EXTERIOR_WALL_LENGTH_COEFF: f32 = 1.;
 const INTERIOR_WALL_THICKNESS_COEFF: f32 = 0.5;
 const INTERIOR_WALL_LENGTH_COEFF: f32 = 1.;
+
+const TRANSPARENCY_COEFF: f32 = 0.1;
 // endregion: --- Game Constants
 
 // region:    --- Resources
@@ -62,6 +67,11 @@ pub struct ArenaSize {
 struct FoodCount(u32);
 
 #[derive(Resource)]
+struct GameTextures {
+	bonus_star: Handle<Image>,
+}
+
+#[derive(Resource)]
 struct Score(u32);
 
 #[derive(Resource)]
@@ -69,6 +79,15 @@ struct Camera(Entity);
 
 #[derive(Resource)]
 struct PositionsAvailable(HashSet<Position>);
+
+#[derive(Resource)]
+pub struct CrossingObstaclesTimer(pub Option<Timer>, pub bool, pub bool);
+
+impl Default for CrossingObstaclesTimer {
+    fn default() -> Self {
+        Self(None, false, false)
+    }
+}
 // endregion: --- Resources
 
 pub struct GamePlugin;
@@ -109,7 +128,22 @@ impl Plugin for GamePlugin {
 		// 		.run_in_bevy_state(AppState::InGame)
 		// 		.with_system(check_correct_snake_head_position_system).into(),
 		// )
-		.add_system(check_correct_snake_head_position_system.run_in_bevy_state(AppState::InGame))
+		.add_system_set(
+			ConditionSet::new()
+			.run_if_not(check_snake_is_invincible_system)
+			.run_in_bevy_state(AppState::InGame)
+			.with_system(check_correct_snake_head_position_system)
+			.into()
+		)
+		.add_system_set(
+			ConditionSet::new()
+			.run_if(check_snake_is_invincible_system)
+			.run_if_resource_exists::<CrossingObstaclesTimer>()
+			.run_in_bevy_state(AppState::InGame)
+			.with_system(snake_bonus_timer_system)
+			.with_system(obstacles_crossing_system)
+			.into()
+		)
 		.add_system(snake_ate_food_system.run_in_bevy_state(AppState::InGame))
 		.add_system(score_system.run_in_bevy_state(AppState::InGame))
 		.add_system(check_end_of_game_system.run_in_bevy_state(AppState::InGame))
@@ -182,6 +216,10 @@ fn setup_system(
 
 	// add count food resource
 	commands.insert_resource(FoodCount(0));
+
+	// add GameTextures resource
+	// commands.insert_resource(GameTextures {bonus_star: asset_server.load("star.png")}); ne voulais pas changer de couleur
+	// commands.insert_resource(GameTextures {bonus_star: asset_server.load("player_b_01.png")}); Seul png qui changeait bien de couleur
 	
 	// add score resource
 	commands.insert_resource(Score(0));
@@ -411,6 +449,11 @@ fn position_translation_system(
 	}
 }
 
+fn check_snake_is_invincible_system(snake_head_query: Query<&SnakeHead>,) -> bool {
+	let snake_head = snake_head_query.get_single().unwrap();
+	snake_head.invincible
+}
+
 fn check_correct_snake_head_position_system(
 	snake_head_query: Query<&Position, With<SnakeHead>>,
 	snake_body_query: Query<&Position, With<SnakeBody>>,
@@ -418,7 +461,7 @@ fn check_correct_snake_head_position_system(
 	mut app_state: ResMut<State<AppState>>
 ) {
 	if let Ok(snake_head_position) = snake_head_query.get_single() {
-		if /*collide_with_body(snake_head_position, snake_body_query) ||*/ collide_with_wall(snake_head_position, wall_query) {
+		if collide_with_body(snake_head_position, snake_body_query) || collide_with_wall(snake_head_position, wall_query) {
 			app_state.set(AppState::GameOver(false));
 		}
 	}
@@ -442,6 +485,110 @@ fn collide_with_wall(snake_head_position: &Position, wall_query: Query<&Position
 	false
 }
 
+fn snake_bonus_timer_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut snake_head_query: Query<(Entity, &mut Sprite, &mut SnakeHead, &mut BonusTimer), (Without<SnakeBody>, With<SnakeHead>)>,
+) {
+	let (mut snake_entity, mut sprite, mut snake_head, mut bonus_timer) = snake_head_query.get_single_mut().unwrap();
+    
+    let mut life_timer = bonus_timer.life_timer.as_mut().unwrap();
+    life_timer.tick(time.delta());
+    if life_timer.finished() {
+        if bonus_timer.life_cycle == 3 {
+            snake_head.invincible = false;
+			sprite.color = SNAKE_HEAD_COLOR;
+            commands.entity(snake_entity).remove::<BonusTimer>();
+        } else {
+            bonus_timer.life_cycle += 1 as usize;
+            
+            match bonus_timer.life_cycle {
+                1 => {
+                    bonus_timer.color_timer = Timer::from_seconds(0.5, TimerMode::Repeating);
+                    bonus_timer.life_timer = Some(Timer::from_seconds(5., TimerMode::Once));
+                },
+                2 => {
+                    bonus_timer.color_timer = Timer::from_seconds(1., TimerMode::Repeating);
+                    bonus_timer.life_timer = Some(Timer::from_seconds(6., TimerMode::Once));
+                },
+                3 => {
+                    bonus_timer.color_timer = Timer::from_seconds(2., TimerMode::Repeating);
+                    bonus_timer.life_timer = Some(Timer::from_seconds(4., TimerMode::Once));
+                },
+                _ => ()
+            }
+        }
+    }
+
+}
+
+fn obstacles_crossing_system(
+	mut commands: Commands,
+	time: Res<Time>,
+    snake_head_query: Query<&SnakeHead, With<SnakeHead>>,
+    bonus_timer_query: Query<&BonusTimer, With<SnakeHead>>,
+	mut wall_query: Query<&mut Sprite, (With<Wall>, With<Collision>)>,
+	mut snake_body_query: Query<&mut Sprite, (With<SnakeBody>, Without<SnakeHead>, Without<Wall>)>,
+	mut crossing_obstacles_timer: ResMut<CrossingObstaclesTimer>,
+) {
+	if !crossing_obstacles_timer.1 {
+		change_color_of_snake_body_and_walls(&mut wall_query, &mut snake_body_query, !crossing_obstacles_timer.2);
+		crossing_obstacles_timer.1 = true;
+		crossing_obstacles_timer.2 = true;
+	} else {
+		if !snake_head_query.get_single().unwrap().invincible {
+			
+			if crossing_obstacles_timer.2 {
+				change_color_of_snake_body_and_walls(&mut wall_query, &mut snake_body_query, !crossing_obstacles_timer.2);
+			}
+
+			commands.remove_resource::<CrossingObstaclesTimer>();
+		} else {
+			let life_cycle = bonus_timer_query.get_single().unwrap().life_cycle;
+			if life_cycle == 3 {
+				match &mut crossing_obstacles_timer.0 {
+					None => {
+						crossing_obstacles_timer.0 = Some(Timer::from_seconds(0.5, TimerMode::Repeating));
+					},
+					Some(timer) => {
+						timer.tick(time.delta());
+    					if timer.finished() {
+							change_color_of_snake_body_and_walls(&mut wall_query, &mut snake_body_query, !crossing_obstacles_timer.2);
+							crossing_obstacles_timer.2 = !crossing_obstacles_timer.2;
+						}
+					}
+				}
+			}
+		}
+
+	}
+}
+
+fn change_color_of_snake_body_and_walls(
+	mut wall_query: &mut Query<&mut Sprite, (With<Wall>, With<Collision>)>,
+	mut snake_body_query: &mut Query<&mut Sprite, (With<SnakeBody>, Without<SnakeHead>, Without<Wall>)>,
+	lighten: bool
+) {
+	let mut wall_color = get_color(lighten, WALL_COLOR);
+	let mut snake_body_color = get_color(lighten, SNAKE_BODY_COLOR);
+
+	for mut wall_sprite in wall_query.iter_mut() {
+		wall_sprite.color = wall_color;
+	}
+
+	for mut snake_body_sprite in snake_body_query.iter_mut() {
+		snake_body_sprite.color = snake_body_color;
+	}
+}
+
+fn get_color(lighten: bool, color_init: Color) -> Color {
+	if lighten {
+		let rgba = color_init.as_rgba_f32();
+		return Color::rgba(rgba[0], rgba[1], rgba[2], TRANSPARENCY_COEFF);
+	}
+	
+	color_init
+}
 
 fn convert(pos: f32, bound_window: f32, bound_game: f32) -> f32 {
 	let tile_size = bound_window / bound_game;
@@ -452,16 +599,51 @@ fn snake_ate_food_system(
 	mut commands: Commands,
 	mut food_count: ResMut<FoodCount>,
 	mut score: ResMut<Score>,
-	mut snake_head_query: Query<(&Position, &mut SnakeHead), With<SnakeHead>>,
-	food_query: Query<(Entity, &Position, &FoodTimer), With<Food>>,
+	mut snake_head_query: Query<(Entity, &Position, &mut SnakeHead), With<SnakeHead>>,
+	food_query: Query<(Entity, &Position, &FoodTimer, &Food), With<Food>>,
 	game_type: Res<GameType>
 ) {
-	if let Ok((snake_position, mut snake_head)) = snake_head_query.get_single_mut() {
-		for (food_entity, food_position, food_timer) in food_query.iter() {
+	if let Ok((mut snake_entity, snake_position, mut snake_head)) = snake_head_query.get_single_mut() {
+		for (food_entity, food_position, food_timer, food) in food_query.iter() {
 			if is_same_position(snake_position, food_position) {
-				food_count.0 -= 1;
 				snake_head.ate = true;
-				score.0 += (get_points(food_timer.0.duration().as_secs(), food_timer.0.elapsed().as_secs()) * game_type.multiplier);
+
+				match food.0 {
+					FoodType::Simple => {
+						food_count.0 -= 1;
+						score.0 += (get_points(food_timer.0.duration().as_secs(), food_timer.0.elapsed().as_secs()) * game_type.multiplier);
+					},
+					FoodType::Gold => score.0 += (10 * game_type.multiplier),
+					FoodType::Bonus => {
+						snake_head.ate = false;
+						snake_head.invincible = true;
+						commands
+							.entity(snake_entity)
+							.insert(BonusTimer {
+								color_timer: Timer::from_seconds(0.05, TimerMode::Repeating),
+								colors: vec![
+									Color::rgb(1., 0., 0.), // Red
+									Color::rgb(1., 0.5, 0.), // Orange
+									Color::rgb(1., 1., 0.), // Yellow
+									Color::rgb(0.5, 1., 0.), // Chartreuse
+									Color::rgb(0., 1., 0.), // Green
+									Color::rgb(0., 1., 0.5), // Spring Green
+									Color::rgb(0., 1., 1.), // Cyan
+									Color::rgb(0., 0.5, 1.), // Dodger Blue
+									Color::rgb(0., 0., 1.), // Blue
+									Color::rgb(0.5, 0., 1.), // Purple
+									Color::rgb(1., 0., 1.), // Violet
+									Color::rgb(1., 0., 0.5), // Magenta
+								],
+								index_color: 0,
+								life_timer: Some(Timer::from_seconds(15., TimerMode::Once)),
+								life_cycle: 0
+							}
+						);
+
+						commands.insert_resource(CrossingObstaclesTimer::default());
+					}
+				}
 				commands.entity(food_entity).despawn();
 			}
 		}
@@ -597,6 +779,7 @@ fn cleanup_system(mut commands: Commands, camera: Res<Camera>, mut query: Query<
 	// println!("FoodCount");
 	commands.remove_resource::<PositionsAvailable>();
 	// println!("PositionsAvailable");
+	commands.remove_resource::<CrossingObstaclesTimer>();
 	commands.entity(camera.0).despawn_recursive();
 	// println!("camera");
 	commands.remove_resource::<Camera>();
