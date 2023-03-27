@@ -384,9 +384,11 @@ fn add_new_body_part(commands: &mut Commands, snake_head_actual_position: Positi
         id: Uuid::new_v4()
     };
 
+	let color = get_color(snake_head.invincible, SNAKE_BODY_COLOR);
+
     commands.spawn(SpriteBundle {
         sprite: Sprite {
-            color: SNAKE_BODY_COLOR,
+            color: color,
             ..Default::default()
         },
         transform: Transform {
