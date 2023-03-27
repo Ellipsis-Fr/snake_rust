@@ -178,9 +178,9 @@ fn score_system(
 	});
 }
 
-fn cleanup_system(mut commands: Commands, menu_data: Res<MenuData>, mut query: Query<Entity, With<Text>>) {
+fn cleanup_system(mut commands: Commands, menu_data: Res<MenuData>, mut query: Query<Entity, (With<Text>, Without<Style>)>) {
+    // "Without<Style>" car cela comprenait le texte présent dans le bouton, ce qui posait pb pour mon précédent code... 
     if let Ok(entity) = query.get_single() {
-        dbg!("là", entity);
 		commands.entity(entity).despawn_recursive();
 	}
 
