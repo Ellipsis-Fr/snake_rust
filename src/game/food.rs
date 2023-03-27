@@ -192,8 +192,8 @@ fn gold_food_spawn_system(
         },
         transform: Transform {
             translation: Vec3::new(
-                convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
-                convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+                convert(new_position.x as f32, arena_size.px_width, arena_size.tile_width as f32),
+                convert(new_position.y as f32, arena_size.px_height, arena_size.tile_height as f32),
                 0.0,
             ),
             ..Default::default()
@@ -212,7 +212,7 @@ fn bonus_food_spawn_system(
     mut materials: ResMut<Assets<ColorMaterial>>,
     arena_size: Res<ArenaSize>,
     positions_available: Res<PositionsAvailable>,
-    game_texture: Res<GameTextures>,
+    // game_texture: Res<GameTextures>, Pas utilisé
     query: Query<(&Position), Or<(With<SnakeHead>, With<SnakeBody>, With<Food>)>>,
 ) {
     if !is_lucky(20.) {
@@ -226,15 +226,13 @@ fn bonus_food_spawn_system(
     }
     let new_position = get_new_food_position(positions_available_depending_snake_and_food);
     // systeme de changement de couleur à utiliser https://github.com/bevyengine/bevy/discussions/2869
-    let t =  materials.add(ColorMaterial::from(Color::RED));
-    // commands.insert_resource(t.clone());
 
     commands.spawn(MaterialMesh2dBundle {
         mesh: meshes.add(shape::Circle::new(10.).into()).into(),
-        material: t,
+        material: materials.add(ColorMaterial::from(Color::RED)),
         transform: Transform::from_translation(Vec3::new(
-            convert(new_position.x as f32, arena_size.width, ARENA_WIDTH as f32),
-            convert(new_position.y as f32, arena_size.height, ARENA_HEIGHT as f32),
+            convert(new_position.x as f32, arena_size.px_width, arena_size.tile_width as f32),
+            convert(new_position.y as f32, arena_size.px_height, arena_size.tile_height as f32),
             0.0,
         )),
         ..Default::default()
